@@ -1,0 +1,261 @@
+-- LuaWare AutoFarm GUI
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local InsertService = game:GetService("InsertService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Backpack = LocalPlayer:WaitForChild("Backpack")
+local leaderstats = LocalPlayer:WaitForChild("leaderstats")
+local ShecklesCount = leaderstats:WaitForChild("Sheckles")
+local GameEvents = ReplicatedStorage:WaitForChild("GameEvents")
+local Farms = Workspace:WaitForChild("Farm")
+
+--// GUI Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LuaWare"
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Parent = ScreenGui
+Main.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Main.Size = UDim2.new(0.8,0,0.8,0)
+Main.Position = UDim2.new(0.1,0,0.1,0)
+
+-- left panel
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Name = "LeftPanel"
+LeftPanel.Parent = Main
+LeftPanel.BackgroundColor3 = Color3.fromRGB(30,30,30)
+LeftPanel.Size = UDim2.new(0.3,0,1,0)
+LeftPanel.Position = UDim2.new(0,0,0,0)
+
+-- right panel
+local RightPanel = Instance.new("Frame")
+RightPanel.Name = "RightPanel"
+RightPanel.Parent = Main
+RightPanel.BackgroundColor3 = Color3.fromRGB(40,40,40)
+RightPanel.Size = UDim2.new(0.7,0,1,0)
+RightPanel.Position = UDim2.new(0.3,0,0,0)
+
+local function roundify(obj,radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0,radius)
+	corner.Parent = obj
+end
+
+-- ========= Original Depso Features =========
+local AutoPlant, AutoPlantRandom, AutoHarvest, AutoBuy, AutoSell, AutoWalk, NoClip = false,false,false,false,false,false,false
+local SellThreshold, AutoWalkMaxWait = 15,10
+local SelectedSeed, SelectedSeedStock = {Selected=""}, nil
+
+-- get player's farm
+local function GetFarm(PlayerName)
+	for _,f in ipairs(Farms:GetChildren()) do
+		local owner=f:FindFirstChild("Important") and f.Important:FindFirstChild("Data") and f.Important.Data:FindFirstChild("Owner")
+		if owner and owner.Value==PlayerName then
+			return f
+		end
+	end
+end
+
+local MyFarm = GetFarm(LocalPlayer.Name)
+local PlantLocations = MyFarm and MyFarm.Important:FindFirstChild("Plant_Locations")
+local PlantsPhysical = MyFarm and MyFarm.Important:FindFirstChild("Plants_Physical")
+
+-- planting
+local function Plant(Position,Seed)
+	if GameEvents:FindFirstChild("Plant_RE") then
+		GameEvents.Plant_RE:FireServer(Position,Seed)
+	end
+end
+
+local function GetRandomFarmPoint()
+	if not PlantLocations then return Vector3.new(0,0,0) end
+	local PlantAreas = PlantLocations:GetChildren()
+	local Area = PlantAreas[math.random(1,#PlantAreas)]
+	local pos = Area.Position
+	local size = Area.Size
+	local X = math.random(pos.X-size.X/2,pos.X+size.X/2)
+	local Z = math.random(pos.Z-size.Z/2,pos.Z+size.Z/2)
+	return Vector3.new(X,4,Z)
+end
+
+-- harvesting
+local function HarvestPlant(Plant)
+	local Prompt = Plant:FindFirstChild("ProximityPrompt",true)
+	if Prompt and Prompt.Enabled then
+		fireproximityprompt(Prompt)
+	end
+end
+
+-- buying seeds
+local function BuySeed(Seed)
+	if GameEvents:FindFirstChild("BuySeedStock") then
+		GameEvents.BuySeedStock:FireServer(Seed)
+	end
+end
+
+-- selling
+local function SellInventory()
+	local Char = LocalPlayer.Character
+	if not Char then return end
+	local Prev = Char:GetPivot()
+	Char:PivotTo(CFrame.new(62,4,-26))
+	while wait() do
+		if ShecklesCount.Value>0 then break end
+		GameEvents.Sell_Inventory:FireServer()
+	end
+	Char:PivotTo(Prev)
+end
+
+-- ========= GUI Elements =========
+local yOffset=20
+
+local function makeSwitch(parent,name,callback)
+	local btn=Instance.new("TextButton")
+	btn.Parent=parent
+	btn.BackgroundColor3=Color3.fromRGB(60,60,60)
+	btn.Size=UDim2.new(0,200,0,30)
+	btn.Position=UDim2.new(0,20,0,yOffset)
+	btn.Text="[OFF] "..name
+	btn.TextColor3=Color3.fromRGB(255,255,255)
+	btn.Font=Enum.Font.Gotham
+	btn.TextSize=18
+	roundify(btn,6)
+	local state=false
+	btn.MouseButton1Click:Connect(function()
+		state=not state
+		btn.Text=(state and "[ON] " or "[OFF] ")..name
+		callback(state)
+	end)
+	yOffset=yOffset+40
+end
+
+local function makeButton(parent,name,callback)
+	local btn=Instance.new("TextButton")
+	btn.Parent=parent
+	btn.BackgroundColor3=Color3.fromRGB(100,100,100)
+	btn.Size=UDim2.new(0,200,0,30)
+	btn.Position=UDim2.new(0,20,0,yOffset)
+	btn.Text=name
+	btn.TextColor3=Color3.fromRGB(255,255,255)
+	btn.Font=Enum.Font.Gotham
+	btn.TextSize=18
+	roundify(btn,6)
+	btn.MouseButton1Click:Connect(callback)
+	yOffset=yOffset+40
+end
+
+local function makeSlider(parent,name,min,max,default,callback)
+	local lbl=Instance.new("TextLabel")
+	lbl.Parent=parent
+	lbl.Size=UDim2.new(0,200,0,20)
+	lbl.Position=UDim2.new(0,20,0,yOffset)
+	lbl.BackgroundTransparency=1
+	lbl.Text=name..": "..tostring(default)
+	lbl.TextColor3=Color3.fromRGB(255,255,255)
+	lbl.TextXAlignment=Enum.TextXAlignment.Left
+	lbl.Font=Enum.Font.Gotham
+	lbl.TextSize=16
+	yOffset=yOffset+20
+
+	local slider=Instance.new("TextButton")
+	slider.Parent=parent
+	slider.BackgroundColor3=Color3.fromRGB(80,80,80)
+	slider.Size=UDim2.new(0,200,0,20)
+	slider.Position=UDim2.new(0,20,0,yOffset)
+	roundify(slider,6)
+	local fill=Instance.new("Frame")
+	fill.Parent=slider
+	fill.BackgroundColor3=Color3.fromRGB(255,255,0)
+	fill.Size=UDim2.new((default-min)/(max-min),0,1,0)
+	roundify(fill,6)
+	local val=default
+	slider.MouseButton1Down:Connect(function(x)
+		local rel=(x-slider.AbsolutePosition.X)/slider.AbsoluteSize.X
+		rel=math.clamp(rel,0,1)
+		val=math.floor(min+(max-min)*rel)
+		fill.Size=UDim2.new(rel,0,1,0)
+		lbl.Text=name..": "..tostring(val)
+		callback(val)
+	end)
+	yOffset=yOffset+40
+end
+
+-- ========= Main Features =========
+local function createMainFeatures()
+	yOffset=20
+	makeSwitch(RightPanel,"Auto Plant",function(v) AutoPlant=v end)
+	makeSwitch(RightPanel,"Plant Random Points",function(v) AutoPlantRandom=v end)
+	makeSwitch(RightPanel,"Auto Harvest",function(v) AutoHarvest=v end)
+	makeSwitch(RightPanel,"Auto Buy",function(v) AutoBuy=v end)
+	makeSwitch(RightPanel,"Auto Sell",function(v) AutoSell=v end)
+	makeSwitch(RightPanel,"Auto Walk",function(v) AutoWalk=v end)
+	makeSwitch(RightPanel,"NoClip",function(v) NoClip=v end)
+	makeSlider(RightPanel,"Crops Threshold",1,199,15,function(v) SellThreshold=v end)
+	makeSlider(RightPanel,"Max Walk Delay",1,120,10,function(v) AutoWalkMaxWait=v end)
+	makeButton(RightPanel,"Plant All",function()
+		if SelectedSeed.Selected~="" then Plant(GetRandomFarmPoint(),SelectedSeed.Selected) end
+	end)
+	makeButton(RightPanel,"Buy All",function()
+		if SelectedSeed.Selected~="" then BuySeed(SelectedSeed.Selected) end
+	end)
+	makeButton(RightPanel,"Sell Inventory",function()
+		SellInventory()
+	end)
+end
+
+-- left panel categories
+local selectedCategory
+local function makeCategoryButton(name,y)
+	local btn=Instance.new("TextButton")
+	btn.Parent=LeftPanel
+	btn.Size=UDim2.new(0.9,0,0,30)
+	btn.Position=UDim2.new(0.05,0,0,y)
+	btn.BackgroundColor3=Color3.fromRGB(50,50,50)
+	btn.Text=name
+	btn.TextColor3=Color3.fromRGB(255,255,255)
+	btn.Font=Enum.Font.Gotham
+	btn.TextSize=18
+	roundify(btn,6)
+	btn.MouseButton1Click:Connect(function()
+		if selectedCategory then selectedCategory.BackgroundColor3=Color3.fromRGB(50,50,50) end
+		selectedCategory=btn
+		btn.BackgroundColor3=Color3.fromRGB(80,80,80)
+		for _,c in ipairs(RightPanel:GetChildren()) do c:Destroy() end
+		if name=="Main" then createMainFeatures() end
+	end)
+end
+
+makeCategoryButton("Main",20)
+makeCategoryButton("Credits",70)
+
+-- ========= AUTO LOOPS =========
+RunService.Heartbeat:Connect(function()
+	if AutoPlant and SelectedSeed.Selected~="" then
+		local pos=GetRandomFarmPoint()
+		Plant(pos,SelectedSeed.Selected)
+	end
+	if AutoHarvest and PlantsPhysical then
+		for _,p in ipairs(PlantsPhysical:GetChildren()) do HarvestPlant(p) end
+	end
+	if AutoBuy and SelectedSeed.Selected~="" then
+		BuySeed(SelectedSeed.Selected)
+	end
+	if AutoSell and #Backpack:GetChildren()>=SellThreshold then
+		SellInventory()
+	end
+	if NoClip then
+		local char=LocalPlayer.Character
+		if char then
+			for _,p in ipairs(char:GetDescendants()) do
+				if p:IsA("BasePart") then p.CanCollide=false end
+			end
+		end
+	end
+end)
