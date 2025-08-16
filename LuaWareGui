@@ -1,0 +1,207 @@
+-- LuaWare Sliding GUI (lazy-load, screen adaptive, text toggle, main placeholder + switch)
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local TweenService = game:GetService("TweenService")
+local camera = workspace:WaitForChild("CurrentCamera")
+
+local isGAGGame = (game.PlaceId == 126884695634066)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LuaWareUI"
+screenGui.Parent = playerGui
+
+local BORDER_THICK = 3
+local CORNER_RADIUS = 12
+
+local function roundify(obj,radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0,radius)
+    corner.Parent = obj
+end
+
+-- adaptive size
+local function getSize()
+    local size = camera.ViewportSize
+    local width = math.min(size.X*0.2,200)
+    local height = math.min(size.Y*0.4,250)
+    return width,height
+end
+
+-- main frame
+local width,height = getSize()
+local borderFrame = Instance.new("Frame")
+borderFrame.Position = UDim2.new(0,10,0,10)
+borderFrame.Size = UDim2.new(0,width,0,height)
+borderFrame.BackgroundColor3 = Color3.fromRGB(255,255,0)
+borderFrame.Parent = screenGui
+roundify(borderFrame,CORNER_RADIUS)
+
+local container = Instance.new("Frame")
+container.Position = UDim2.new(0,BORDER_THICK,0,BORDER_THICK)
+container.Size = UDim2.new(1,-BORDER_THICK*2,1,-BORDER_THICK*2)
+container.BackgroundColor3 = Color3.fromRGB(30,30,30)
+container.Parent = borderFrame
+roundify(container,CORNER_RADIUS-2)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,40)
+title.BackgroundTransparency = 1
+title.RichText = true
+title.Text = isGAGGame and 'LuaWare <font color="#ff4444">| GAG</font>' or "LuaWare"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextSize = 24
+title.Font = Enum.Font.GothamBold
+title.Parent = container
+
+-- table to hold lazy-loaded panels
+local panels = {}
+
+-- create panel only when needed
+local function getPanel(name)
+    if panels[name] then return panels[name] end
+
+    local width,height = getSize()
+    local panel = Instance.new("Frame")
+    panel.Size = UDim2.new(0,width,0,height)
+    panel.Position = UDim2.new(1,0,0,10)
+    panel.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    panel.Parent = screenGui
+    panel.ClipsDescendants = true
+    roundify(panel,CORNER_RADIUS)
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0,25,0,25)
+    closeBtn.Position = UDim2.new(1,-30,0,5)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(255,60,60)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    closeBtn.TextSize = 18
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Parent = panel
+    roundify(closeBtn,6)
+    closeBtn.MouseButton1Click:Connect(function()
+        panel:TweenPosition(UDim2.new(1,0,0,10),"Out","Quad",0.4,true)
+    end)
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1,-20,1,-20)
+    textLabel.Position = UDim2.new(0,10,0,10)
+    textLabel.Text = name.." panel"
+    textLabel.TextColor3 = Color3.fromRGB(255,255,255)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextScaled = true
+    textLabel.Parent = panel
+
+    -- special content for Main
+    if name == "Main" then
+        local placeholder = Instance.new("TextLabel")
+        placeholder.Size = UDim2.new(1,-20,0,50)
+        placeholder.Position = UDim2.new(0,10,0,50)
+        placeholder.Text = "(placeholder)"
+        placeholder.TextColor3 = Color3.fromRGB(255,255,255)
+        placeholder.BackgroundTransparency = 1
+        placeholder.TextScaled = true
+        placeholder.Parent = panel
+
+        local switchBtn = Instance.new("TextButton")
+        switchBtn.Size = UDim2.new(0.6,0,0,40)
+        switchBtn.Position = UDim2.new(0.2,0,0,110)
+        switchBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+        switchBtn.Text = "Switch"
+        switchBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        switchBtn.TextSize = 18
+        switchBtn.Font = Enum.Font.GothamBold
+        switchBtn.Parent = panel
+        roundify(switchBtn,6)
+
+        local toggled = false
+        switchBtn.MouseButton1Click:Connect(function()
+            toggled = not toggled
+            switchBtn.Text = toggled and "On" or "Off"
+        end)
+    end
+
+    panels[name] = panel
+    return panel
+end
+
+-- category buttons
+local selectedCategory = nil
+local function makeCategoryButton(name,yPos)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9,0,0,30)
+    btn.Position = UDim2.new(0.05,0,0,yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.TextSize = 18
+    btn.Font = Enum.Font.Gotham
+    btn.Parent = container
+    roundify(btn,8)
+
+    btn.MouseButton1Click:Connect(function()
+        if selectedCategory then
+            selectedCategory.BackgroundColor3 = Color3.fromRGB(50,50,50)
+        end
+        selectedCategory = btn
+        btn.BackgroundColor3 = Color3.fromRGB(80,80,80)
+
+        for _,p in pairs(panels) do
+            p:TweenPosition(UDim2.new(1,0,0,10),"Out","Quad",0.4,true)
+        end
+
+        local panel = getPanel(name)
+        panel:TweenPosition(UDim2.new(0,10,0,10),"Out","Quad",0.4,true)
+    end)
+end
+
+makeCategoryButton("Credits",50)
+makeCategoryButton("Main",90)
+makeCategoryButton("Auto",130)
+
+-- toggle button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0,60,0,30)
+toggleBtn.Position = UDim2.new(0,220,0,10)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(100,100,100)
+toggleBtn.Text = "Toggle"
+toggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+toggleBtn.TextSize = 18
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = screenGui
+roundify(toggleBtn,6)
+
+local visible = true
+toggleBtn.MouseButton1Click:Connect(function()
+    visible = not visible
+    borderFrame.Visible = visible
+    for _,p in pairs(panels) do
+        p:TweenPosition(UDim2.new(1,0,0,10),"Out","Quad",0.4,true)
+    end
+end)
+
+-- click outside panels to hide
+screenGui.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mousePos = input.Position
+        for _,panel in pairs(panels) do
+            local pos = panel.AbsolutePosition
+            local size = panel.AbsoluteSize
+            if not (mousePos.X >= pos.X and mousePos.X <= pos.X+size.X and
+                    mousePos.Y >= pos.Y and mousePos.Y <= pos.Y+size.Y) then
+                panel:TweenPosition(UDim2.new(1,0,0,10),"Out","Quad",0.4,true)
+            end
+        end
+    end
+end)
+
+-- resize GUI
+local function resizeGui()
+    local width,height = getSize()
+    borderFrame.Size = UDim2.new(0,width,0,height)
+    container.Size = UDim2.new(1,-BORDER_THICK*2,1,-BORDER_THICK*2)
+    for _,p in pairs(panels) do
+        p.Size = UDim2.new(0,width,0,height)
+    end
+end
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(resizeGui)
+resizeGui()
