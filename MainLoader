@@ -1,0 +1,140 @@
+-- // Gui Creator Script
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local TweenService = game:GetService("TweenService")
+
+-- check game id
+local isGAGGame = (game.PlaceId == 126884695634066)
+
+-- main screen gui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LuaWareUI"
+screenGui.Parent = playerGui
+
+-- helper: rounded corners
+local function roundify(obj, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius)
+    corner.Parent = obj
+end
+
+-- main scaling
+local BORDER_THICK = 0.004 -- ~0.4% of screen
+local CORNER_RADIUS = 12
+
+-- left panel (categories)
+local borderFrame = Instance.new("Frame")
+borderFrame.Name = "LuaWareBorder"
+borderFrame.Size = UDim2.new(0.18, 0, 0.35, 0) -- relative to screen
+borderFrame.Position = UDim2.new(0, 10, 0, 10)
+borderFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+borderFrame.Parent = screenGui
+roundify(borderFrame, CORNER_RADIUS)
+
+local container = Instance.new("Frame")
+container.Name = "LuaWareContainer"
+container.Size = UDim2.new(1, -6, 1, -6)
+container.Position = UDim2.new(0, 3, 0, 3)
+container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+container.Parent = borderFrame
+roundify(container, CORNER_RADIUS - 2)
+
+-- LuaWare title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.RichText = true
+title.Text = isGAGGame and 'LuaWare <font color="#ff4444">| GAG</font>' or "LuaWare"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 24
+title.Font = Enum.Font.GothamBold
+title.Parent = container
+
+-- selected category
+local selectedCategory = nil
+local function makeCategoryButton(name, yPos, onClick)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 18
+    btn.Font = Enum.Font.Gotham
+    btn.Parent = container
+    roundify(btn, 8)
+
+    btn.MouseButton1Click:Connect(function()
+        if selectedCategory then
+            selectedCategory.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        end
+        selectedCategory = btn
+        btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        if onClick then onClick() end
+    end)
+end
+
+-- function to spawn the right panel (features)
+local function spawnExtraGui()
+    local existing = screenGui:FindFirstChild("ExtraGui")
+    if existing then existing:Destroy() end
+
+    local extraFrame = Instance.new("Frame")
+    extraFrame.Name = "ExtraGui"
+    extraFrame.Size = UDim2.new(0.3, 0, 0.35, 0)
+    extraFrame.Position = UDim2.new(0.2, 20, 0, 10)
+    extraFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    extraFrame.Parent = screenGui
+    roundify(extraFrame, CORNER_RADIUS)
+
+    -- Auto Harvest toggle
+    local ahBtn = Instance.new("TextButton")
+    ahBtn.Size = UDim2.new(0.8, 0, 0, 40)
+    ahBtn.Position = UDim2.new(0.1, 0, 0, 50)
+    ahBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    ahBtn.Text = "Auto Harvest: OFF"
+    ahBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ahBtn.TextSize = 20
+    ahBtn.Font = Enum.Font.Gotham
+    ahBtn.Parent = extraFrame
+    roundify(ahBtn, 8)
+
+    local autoHarvest = false
+    ahBtn.MouseButton1Click:Connect(function()
+        autoHarvest = not autoHarvest
+        ahBtn.Text = "Auto Harvest: " .. (autoHarvest and "ON" or "OFF")
+        ahBtn.BackgroundColor3 = autoHarvest and Color3.fromRGB(60,180,60) or Color3.fromRGB(70,70,70)
+
+        -- your actual harvesting logic goes here
+    end)
+end
+
+-- categories
+makeCategoryButton("Main", 50, spawnExtraGui)
+makeCategoryButton("Credits", 90, function()
+    local existing = screenGui:FindFirstChild("ExtraGui")
+    if existing then existing:Destroy() end
+end)
+
+-- toggle button for left panel
+local ToggleLeft = Instance.new("TextButton")
+ToggleLeft.Parent = screenGui
+ToggleLeft.Size = UDim2.new(0,30,0,30)
+ToggleLeft.Position = UDim2.new(0,10,0,10)
+ToggleLeft.BackgroundColor3 = Color3.fromRGB(60,60,60)
+ToggleLeft.Text = "≡"
+ToggleLeft.TextColor3 = Color3.fromRGB(255,255,255)
+ToggleLeft.Font = Enum.Font.Gotham
+ToggleLeft.TextSize = 20
+roundify(ToggleLeft,6)
+
+local leftOpen = true
+local leftClosedPos = UDim2.new(-0.2,0,0,10)
+local leftOpenPos = borderFrame.Position
+
+ToggleLeft.MouseButton1Click:Connect(function()
+    leftOpen = not leftOpen
+    local goal = {Position = leftOpen and leftOpenPos or leftClosedPos}
+    local tween = TweenService:Create(borderFrame,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),goal)
+    tween:Play()
+end)
